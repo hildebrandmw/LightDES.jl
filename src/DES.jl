@@ -1,74 +1,79 @@
 module DES
 
 import DataStructures
-import FunctionWrappers
 import FunctionWrappers.FunctionWrapper
+import Dates: now
 
+export Simulation, Callback, schedule!, register!, now, StopSimulation
 
-# Much of this code is taken from BenLauwens "SimJulia" package:
-# https://github.com/BenLauwens/SimJulia.jl
-#
-# I'm reimplementing some of it to be more type stable and to move away from
-# the dependence on ResumableFunctions (which is also awesome, but again, I
-# would like more type stability)
+struct UndefinedCallback <: Exception; end
+err(x) = throw(UndefinedCallback())
 
-# Used to order events in a priority queue.
-struct EventKey
-    time        :: UInt64
-    priority    :: UInt64
-    id          :: UInt64
+struct Event
+    handle    :: Int64
+    time        :: Int64
+    priority    :: Int64
 end
 
-function Base.isless(a::EventKey, b::EventKey)
-    return  (a.time < b.time) ||
-            (a.time == b.time && a.priority < b.priority) ||
-            (a.time == b.time && a.priority == b.priority && a.id < b.id)
-end
+# Base.isless(a::Event, b::Event) = (a.time < b.time) ||
+#     (a.time == b.time && a.priority < b.priority) ||
+#     (a.time == b.time && a.priority == b.priority && a.id < b.id)
+Base.isless(a::Event, b::Event) =
+    ifelse(
+        isequal(a.time, b.time),
+        isless(a.priority, b.priority),
+        isless(a.time, b.time)
+    )
 
 mutable struct Simulation
-    # Simulation time. Use a UInt64 to avoid floating point grossness.
-    time :: UInt64
+    time :: Int64
     # Priority queue of events to process.
-    heap :: DataStructures.PriorityQueue{
-        FunctionWrapper{Void,Tuple{Simulation}},
-        EventKey,
-        Base.ForwardOrdering
-    }
-
+    callbacks :: Vector{FunctionWrapper{Nothing,Tuple{Simulation}}}
+    heap :: DataStructures.BinaryHeap{Event,DataStructures.LessThan}
     # When to stop simulation
-    timeout :: UInt64
+    timeout :: Int64
 
     # Inner Constructor
     function Simulation(timeout; starttime = 0)
         return new(
             starttime,
-            DataStructures.PriorityQueue{
-                FunctionWrapper{Void,Tuple{Simulation}},
-                EventKey
-            }(),
+            Vector{FunctionWrapper{Nothing,Tuple{Simulation}}}(),
+            DataStructures.binary_minheap(Event),
             timeout,
         )
     end
 end
 
-const FVS = FunctionWrapper{Void,Tuple{Simulation}}
+struct Callback
+    f :: FunctionWrapper{Nothing,Tuple{Simulation}}
+end
+Callback() = Callback(err)
+(cb::Callback)(sim::Simulation) = cb.f(sim)
 
 now(sim::Simulation) = sim.time
 
-function register(sim::Simulation, fn, intime, priority = 1, id = 1)
-    key = EventKey(now(sim) + intime, priority, id)
-    DataStructures.enqueue!(sim.heap, fn, key)
+function register!(sim :: Simulation, cb :: Callback)
+    # Add the callback to the list of callbacks.
+    push!(sim.callbacks, cb.f)
+    return length(sim.callbacks)
+end
+
+function schedule!(sim :: Simulation, handle, intime, priority = 1)
+    key = Event(handle, now(sim) + intime, priority)
+    push!(sim.heap, key)
+
     return nothing
 end
 
 function step(sim::Simulation)
     # Peek to get both the funciton and the key.
-    (fn, key) = DataStructures.peek(sim.heap)
+    key = pop!(sim.heap)
     # Pop the item off the queue and update sim time.
-    DataStructures.dequeue!(sim.heap)
     sim.time = key.time
     # Call the function.
-    fn(sim)
+    #key.callback(sim)
+    sim.callbacks[key.handle](sim)
+
     return nothing
 end
 
@@ -80,22 +85,19 @@ struct StopSimulation <: Exception end
 function Base.run(sim::Simulation, until = sim.timeout)
     sim.timeout = until
 
-    # Pull events from the heap until there are no more scheduled events
-    # or until the simulation has reached its timeout value.
-    #
-    # Wrap this in a try-catch block to allow any task in the simulation to
-    # throw a StopSimulation() and end simulation early.
     try
         while !isempty(sim) && !timedout(sim)
             step(sim)
         end
-    catch err <: StopSimulation
-        return nothing
+    catch ex
+        if isa(ex,  StopSimulation)
+            return nothing
+        else
+            rethrow(ex)
+        end
     end
 
     return nothing
 end
-
-include("test.jl")
 
 end # module
