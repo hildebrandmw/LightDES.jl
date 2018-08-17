@@ -1,16 +1,16 @@
-using DES
+using LightDES
 using BenchmarkTools
 using Test
 
 mutable struct CBTest
-    callback :: Int
+    handle :: Int
     count :: Int
 end
 CBTest() = CBTest(0, 0)
 
 function increment!(sim::Simulation, cb::CBTest, i)
     cb.count += 1
-    schedule!(sim, cb.callback, i)
+    schedule!(sim, cb.handle, i)
     return nothing
 end
 
@@ -21,13 +21,13 @@ function makesim(timeout)
     sim = Simulation(timeout)
 
     cb1 = CBTest()
-    cb1.callback = register!(sim, Callback((sim) -> increment!(sim, cb1, 1)))
+    cb1.handle = register!(sim, x -> increment!(x, cb1, 1))
 
     cb2 = CBTest()
-    cb2.callback = register!(sim, Callback((sim) -> increment!(sim, cb2, 10)))
+    cb2.handle = register!(sim, x -> increment!(x, cb2, 10))
 
-    schedule!(sim, cb1.callback, 1)
-    schedule!(sim, cb2.callback, 1)
+    schedule!(sim, cb1.handle, 1)
+    schedule!(sim, cb2.handle, 1)
 
     return sim, cb1, cb2
 end
@@ -49,14 +49,14 @@ end
 @testset "Testing Stop Simulation" begin
     sim = Simulation(10)
     cb = CBTest()
-    cb.callback = register!(sim, Callback(sim -> stopsim(sim, cb)))
+    cb.handle = register!(sim, x -> stopsim(x, cb))
 
-    schedule!(sim, cb.callback, 5)
+    schedule!(sim, cb.handle, 5)
     @test run(sim) == nothing
     @test sim.time == 5
     @test isempty(sim)
 
-    cb.callback = register!(sim, Callback(sim -> genericerr(sim, cb)))
-    schedule!(sim, cb.callback, 3)
+    cb.handle = register!(sim, x -> genericerr(x, cb))
+    schedule!(sim, cb.handle, 3)
     @test_throws Exception run(sim)
 end

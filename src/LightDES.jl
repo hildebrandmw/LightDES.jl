@@ -1,29 +1,20 @@
-module DES
+module LightDES
 
 import DataStructures
 import FunctionWrappers.FunctionWrapper
 import Dates: now
 
-export Simulation, Callback, schedule!, register!, now, StopSimulation
-
-struct UndefinedCallback <: Exception; end
-err(x) = throw(UndefinedCallback())
+export Simulation, schedule!, register!, now, StopSimulation
 
 struct Event
-    handle    :: Int64
-    time        :: Int64
-    priority    :: Int64
+    handle :: Int64
+    time :: Int64
+    priority :: Int64
 end
 
-# Base.isless(a::Event, b::Event) = (a.time < b.time) ||
-#     (a.time == b.time && a.priority < b.priority) ||
-#     (a.time == b.time && a.priority == b.priority && a.id < b.id)
-Base.isless(a::Event, b::Event) =
-    ifelse(
-        isequal(a.time, b.time),
-        isless(a.priority, b.priority),
-        isless(a.time, b.time)
-    )
+function Base.isless(a::Event, b::Event) 
+    ifelse(a.time == b.time, a.priority < b.priority, b.time < b.time)
+end
 
 mutable struct Simulation
     time :: Int64
@@ -44,17 +35,11 @@ mutable struct Simulation
     end
 end
 
-struct Callback
-    f :: FunctionWrapper{Nothing,Tuple{Simulation}}
-end
-Callback() = Callback(err)
-(cb::Callback)(sim::Simulation) = cb.f(sim)
-
 now(sim::Simulation) = sim.time
 
-function register!(sim :: Simulation, cb :: Callback)
+function register!(sim :: Simulation, fn)
     # Add the callback to the list of callbacks.
-    push!(sim.callbacks, cb.f)
+    push!(sim.callbacks, fn)
     return length(sim.callbacks)
 end
 
@@ -66,12 +51,8 @@ function schedule!(sim :: Simulation, handle, intime, priority = 1)
 end
 
 function step(sim::Simulation)
-    # Peek to get both the funciton and the key.
     key = pop!(sim.heap)
-    # Pop the item off the queue and update sim time.
     sim.time = key.time
-    # Call the function.
-    #key.callback(sim)
     sim.callbacks[key.handle](sim)
 
     return nothing
