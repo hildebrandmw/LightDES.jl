@@ -37,12 +37,27 @@ end
 
 now(sim::Simulation) = sim.time
 
+"""
+    register!(sim::Simulation, fn)::Int
+
+Register `fn` in the list of callbacks in `sim` and return a handle which can
+be used to schedule this function.
+
+Argument `fn` must be convertable to type 
+`FunctionWrapper{Nothing,Tuple{Simulation}}`.
+"""
 function register!(sim :: Simulation, fn)
     # Add the callback to the list of callbacks.
     push!(sim.callbacks, fn)
     return length(sim.callbacks)
 end
 
+"""
+    schedule!(sim::Simulation, handle, intime, [priority])
+
+Schedule the callback referenced by `handle` for the current simulation time
+plus `intime`.
+"""
 function schedule!(sim :: Simulation, handle, intime, priority = 1)
     key = Event(handle, now(sim) + intime, priority)
     push!(sim.heap, key)
@@ -63,6 +78,12 @@ Base.isempty(sim::Simulation) = isempty(sim.heap)
 
 struct StopSimulation <: Exception end
 
+"""
+    run(sim::Simulation, [until])
+
+Run `sim` until the specified simulation time. If no time is given, `sim` will
+run until its default timeout.
+"""
 function Base.run(sim::Simulation, until = sim.timeout)
     sim.timeout = until
 
