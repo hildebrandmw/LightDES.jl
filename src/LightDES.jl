@@ -13,7 +13,7 @@ struct Event
 end
 
 function Base.isless(a::Event, b::Event) 
-    ifelse(a.time == b.time, a.priority < b.priority, b.time < b.time)
+    ifelse(a.time == b.time, a.priority < b.priority, a.time < b.time)
 end
 
 mutable struct Simulation
