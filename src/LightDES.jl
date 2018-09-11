@@ -4,23 +4,20 @@ import DataStructures
 import FunctionWrappers.FunctionWrapper
 import Dates: now
 
-export Simulation, schedule!, register!, now, StopSimulation
+export Simulation, schedule!, Callback, now, StopSimulation
 
-struct Event
-    handle :: Int64
+struct Event{T}
+    fn :: FunctionWrapper{Nothing, Tuple{T}}
     time :: Int64
     priority :: Int64
 end
 
-function Base.isless(a::Event, b::Event) 
-    ifelse(a.time == b.time, a.priority < b.priority, a.time < b.time)
-end
+Base.isless(a::Event, b::Event) = (a.time == b.time) ? (a.priority < b.priority) : (a.time < b.time)
 
 mutable struct Simulation
     time :: Int64
     # Priority queue of events to process.
-    callbacks :: Vector{FunctionWrapper{Nothing,Tuple{Simulation}}}
-    heap :: DataStructures.BinaryHeap{Event,DataStructures.LessThan}
+    heap :: DataStructures.BinaryHeap{Event{Simulation},DataStructures.LessThan}
     # When to stop simulation
     timeout :: Int64
 
@@ -28,8 +25,7 @@ mutable struct Simulation
     function Simulation(timeout; starttime = 0)
         return new(
             starttime,
-            Vector{FunctionWrapper{Nothing,Tuple{Simulation}}}(),
-            DataStructures.binary_minheap(Event),
+            DataStructures.binary_minheap(Event{Simulation}),
             timeout,
         )
     end
@@ -37,39 +33,33 @@ end
 
 now(sim::Simulation) = sim.time
 
-"""
-    register!(sim::Simulation, fn)::Int
-
-Register `fn` in the list of callbacks in `sim` and return a handle which can
-be used to schedule this function.
-
-Argument `fn` must be convertable to type 
-`FunctionWrapper{Nothing,Tuple{Simulation}}`.
-"""
-function register!(sim :: Simulation, fn)
-    # Add the callback to the list of callbacks.
-    push!(sim.callbacks, fn)
-    return length(sim.callbacks)
+struct Callback <: Function
+    fn :: FunctionWrapper{Nothing,Tuple{Simulation}}
 end
 
-"""
-    schedule!(sim::Simulation, handle, intime, [priority])
+const throw_err(args...) = throw(StopSimulation())
+Callback() = Callback(throw_err)
+(cb::Callback)(args...) = cb.fn(args...)
+unwrap(cb::Callback) = cb.fn
 
-Schedule the callback referenced by `handle` for the current simulation time
-plus `intime`.
+# Overload Event creation
+Event(cb::Callback, args...) = Event(unwrap(cb), args...)
+
 """
-function schedule!(sim :: Simulation, handle, intime, priority = 1)
-    key = Event(handle, now(sim) + intime, priority)
+    schedule!(sim::Simulation, callback::Function, intime, [priority])
+
+Schedule the `callback` for the current simulation time plus `intime`.
+"""
+function schedule!(sim :: Simulation, callback :: Function, intime, priority = 1)
+    key = Event(callback, now(sim) + intime, priority)
     push!(sim.heap, key)
-
     return nothing
 end
 
 function step(sim::Simulation)
     key = pop!(sim.heap)
     sim.time = key.time
-    sim.callbacks[key.handle](sim)
-
+    key.fn(sim)
     return nothing
 end
 
