@@ -33,11 +33,17 @@ end
 
 now(sim::Simulation) = sim.time
 
+"""
+    Callback <: Function
+
+Create a predispatched function wrapper for a callback function. The Callback function must
+take a single argument of type `Simulation` and return `nothing`.
+"""
 struct Callback <: Function
     fn :: FunctionWrapper{Nothing,Tuple{Simulation}}
 end
 
-const throw_err(args...) = throw(StopSimulation())
+throw_err(args...) = throw(StopSimulation())
 Callback() = Callback(throw_err)
 (cb::Callback)(args...) = cb.fn(args...)
 unwrap(cb::Callback) = cb.fn
