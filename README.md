@@ -1,5 +1,10 @@
 # LightDES
 
+[![Build Status](https://travis-ci.org/hildebrandmw/LightDES.jl.svg?branch=master)](https://travis-ci.org/hildebrandmw/LightDES.jl)
+[![codecov.io](https://codecov.io/gh/hildebrandmw/LightDES.jl/graphs/badge.svg?branch=master)](https://codecov.io/gh/hildebrandmw/LightDES.jl)
+[![Project Status: Abandoned – Initial development has started, but there has not yet been a stable, usable release; the project has been abandoned and the author(s) do not intend on continuing development.](https://www.repostatus.org/badges/latest/abandoned.svg)](https://www.repostatus.org/#abandoned)
+
+
 Light weight discrete event simulator for use in applications where event handling functions
 are short and event dispatch consumes a healthy chunk of time.
 
